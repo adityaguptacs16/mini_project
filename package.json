@@ -1,0 +1,21 @@
+{
+  "name": "anti-entropy",
+  "version": "1.0.0",
+  "description": "Distributed anti-entropy repair system using Merkle trees, Express, MongoDB, and Git",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "shell:cron": "bash scripts/anti_entropy_cron.sh",
+    "shell:once": "bash scripts/anti_entropy_cron.sh --once"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^17.4.0",
+    "express": "^4.18.2",
+    "mongoose": "^8.0.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  }
+}
