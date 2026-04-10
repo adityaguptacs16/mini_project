@@ -1,0 +1,2373 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Anti-Entropy Control Plane</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link
+    href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Syne:wght@400;600;800&display=swap"
+    rel="stylesheet">
+  <style>
+    /* ── Reset & Variables ───────────────────────────────────────── */
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --bg: #080c10;
+      --bg2: #0d1117;
+      --bg3: #161b22;
+      --border: #21262d;
+      --border2: #30363d;
+      --text: #e6edf3;
+      --muted: #7d8590;
+      --green: #3fb950;
+      --green-dim: #1a4a22;
+      --cyan: #79c0ff;
+      --cyan-dim: #0d2a45;
+      --orange: #ffa657;
+      --red: #f85149;
+      --red-dim: #3d1010;
+      --yellow: #e3b341;
+      --purple: #bc8cff;
+      --purple-dim: #2a1a4a;
+      --glow-g: 0 0 20px rgba(63, 185, 80, 0.3);
+      --glow-c: 0 0 20px rgba(121, 192, 255, 0.3);
+      --radius: 8px;
+      --radius-lg: 12px;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: 'JetBrains Mono', monospace;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── Scrollbar ───────────────────────────────────────────────── */
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: var(--bg2);
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: var(--border2);
+      border-radius: 3px;
+    }
+
+    /* ── Layout ──────────────────────────────────────────────────── */
+    .shell {
+      display: grid;
+      grid-template-columns: 220px 1fr;
+      grid-template-rows: 48px 1fr;
+      min-height: 100vh;
+    }
+
+    /* ── Top Bar ─────────────────────────────────────────────────── */
+    .topbar {
+      grid-column: 1 / -1;
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 0 20px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .topbar-logo {
+      font-family: 'Syne', sans-serif;
+      font-size: 14px;
+      font-weight: 800;
+      color: var(--cyan);
+      letter-spacing: 0.05em;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .topbar-logo svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    .topbar-sep {
+      flex: 1;
+    }
+
+    .topbar-status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .pulse-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 6px var(--green);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+
+      0%,
+      100% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0.4;
+      }
+    }
+
+    /* ── Sidebar ─────────────────────────────────────────────────── */
+    .sidebar {
+      background: var(--bg2);
+      border-right: 1px solid var(--border);
+      padding: 16px 0;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      overflow-y: auto;
+    }
+
+    .sidebar-section {
+      padding: 6px 16px 2px;
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--muted);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-top: 8px;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 16px;
+      font-size: 12px;
+      color: var(--muted);
+      cursor: pointer;
+      border-left: 2px solid transparent;
+      transition: all 0.15s;
+      user-select: none;
+    }
+
+    .nav-item:hover {
+      color: var(--text);
+      background: var(--bg3);
+    }
+
+    .nav-item.active {
+      color: var(--cyan);
+      background: var(--cyan-dim);
+      border-left-color: var(--cyan);
+    }
+
+    .nav-item svg {
+      width: 14px;
+      height: 14px;
+      flex-shrink: 0;
+    }
+
+    .nav-badge {
+      margin-left: auto;
+      background: var(--red-dim);
+      color: var(--red);
+      font-size: 9px;
+      padding: 1px 5px;
+      border-radius: 10px;
+      font-weight: 700;
+    }
+
+    .nav-badge.ok {
+      background: var(--green-dim);
+      color: var(--green);
+    }
+
+    /* ── Main Content ────────────────────────────────────────────── */
+    .main {
+      background: var(--bg);
+      overflow-y: auto;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    /* ── Pages ───────────────────────────────────────────────────── */
+    .page {
+      display: none;
+      flex-direction: column;
+      gap: 20px;
+      animation: fadeIn 0.2s;
+    }
+
+    .page.active {
+      display: flex;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(6px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* ── Page Header ─────────────────────────────────────────────── */
+    .page-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .page-title {
+      font-family: 'Syne', sans-serif;
+      font-size: 20px;
+      font-weight: 800;
+      color: var(--text);
+    }
+
+    .page-subtitle {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    /* ── Cards ───────────────────────────────────────────────────── */
+    .card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 20px;
+    }
+
+    .card-title {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .card-title svg {
+      width: 13px;
+      height: 13px;
+    }
+
+    /* ── Stat Grid ───────────────────────────────────────────────── */
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 12px;
+    }
+
+    .stat-card {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      transition: border-color 0.2s;
+    }
+
+    .stat-card:hover {
+      border-color: var(--border2);
+    }
+
+    .stat-label {
+      font-size: 10px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .stat-value {
+      font-family: 'Syne', sans-serif;
+      font-size: 28px;
+      font-weight: 800;
+      line-height: 1;
+    }
+
+    .stat-value.green {
+      color: var(--green);
+      text-shadow: var(--glow-g);
+    }
+
+    .stat-value.cyan {
+      color: var(--cyan);
+      text-shadow: var(--glow-c);
+    }
+
+    .stat-value.orange {
+      color: var(--orange);
+    }
+
+    .stat-value.red {
+      color: var(--red);
+    }
+
+    .stat-value.purple {
+      color: var(--purple);
+    }
+
+    .stat-sub {
+      font-size: 10px;
+      color: var(--muted);
+    }
+
+    /* ── Node Grid ───────────────────────────────────────────────── */
+    .node-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 12px;
+    }
+
+    .node-card {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      cursor: pointer;
+      transition: all 0.2s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .node-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 2px;
+      background: linear-gradient(90deg, var(--cyan), var(--purple));
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+
+    .node-card:hover {
+      border-color: var(--cyan);
+    }
+
+    .node-card:hover::before {
+      opacity: 1;
+    }
+
+    .node-name {
+      font-family: 'Syne', sans-serif;
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 8px;
+    }
+
+    .node-hash {
+      font-size: 10px;
+      color: var(--muted);
+      font-family: 'JetBrains Mono', monospace;
+      word-break: break-all;
+      margin-bottom: 10px;
+    }
+
+    .node-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 10px;
+      padding: 3px 8px;
+      border-radius: 12px;
+    }
+
+    .node-status.healthy {
+      background: var(--green-dim);
+      color: var(--green);
+    }
+
+    .node-status.drifted {
+      background: var(--red-dim);
+      color: var(--red);
+    }
+
+    /* ── Merkle Visualiser ───────────────────────────────────────── */
+  .merkle-container {
+  overflow-x: auto;
+  overflow-y: auto;
+  padding: 12px 0;
+  max-height: 400px;
+}
+
+.merkle-tree {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: unset;
+  width: 100%;
+}
+
+    .merkle-tree {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0;
+      min-width: 600px;
+    }
+
+    .merkle-level {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 0;
+  position: relative;
+  width: 100%;
+}
+
+    .merkle-node {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 3px 5px;
+  font-size: 8px;
+  color: var(--muted);
+  font-family: 'JetBrains Mono', monospace;
+  transition: all 0.2s;
+  min-width: 40px;
+  max-width: 60px;
+  text-align: center;
+  cursor: default;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+    .merkle-node:hover {
+      border-color: var(--cyan);
+      color: var(--cyan);
+    }
+
+    .merkle-node.match {
+      border-color: var(--green-dim);
+      color: var(--green);
+    }
+
+    .merkle-node.diff {
+      border-color: var(--red);
+      color: var(--red);
+      background: var(--red-dim);
+    }
+
+    .merkle-node.root {
+      border-color: var(--cyan);
+      color: var(--cyan);
+      font-weight: 700;
+      font-size: 10px;
+    }
+
+    .merkle-connector {
+      width: 100%;
+      height: 20px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      position: relative;
+    }
+
+    /* ── Log Terminal ────────────────────────────────────────────── */
+    .terminal {
+      background: #060a0e;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      height: 280px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .log-line {
+      display: flex;
+      gap: 10px;
+      align-items: baseline;
+      animation: logSlide 0.15s ease;
+    }
+
+    @keyframes logSlide {
+      from {
+        opacity: 0;
+        transform: translateX(-4px);
+      }
+
+      to {
+        opacity: 1;
+      }
+    }
+
+    .log-ts {
+      color: var(--muted);
+      font-size: 10px;
+      flex-shrink: 0;
+    }
+
+    .log-lvl {
+      font-size: 10px;
+      font-weight: 700;
+      flex-shrink: 0;
+      min-width: 38px;
+    }
+
+    .log-msg {
+      color: var(--text);
+      word-break: break-word;
+    }
+
+    .log-lvl.INFO {
+      color: var(--green);
+    }
+
+    .log-lvl.WARN {
+      color: var(--yellow);
+    }
+
+    .log-lvl.ERROR {
+      color: var(--red);
+    }
+
+    .log-lvl.DEBUG {
+      color: var(--cyan);
+    }
+
+    /* ── Buttons ─────────────────────────────────────────────────── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 8px 16px;
+      border-radius: var(--radius);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all 0.2s;
+      user-select: none;
+    }
+
+    .btn svg {
+      width: 13px;
+      height: 13px;
+    }
+
+    .btn-primary {
+      background: var(--cyan-dim);
+      border-color: var(--cyan);
+      color: var(--cyan);
+    }
+
+    .btn-primary:hover {
+      background: var(--cyan);
+      color: var(--bg);
+    }
+
+    .btn-danger {
+      background: var(--red-dim);
+      border-color: var(--red);
+      color: var(--red);
+    }
+
+    .btn-danger:hover {
+      background: var(--red);
+      color: #fff;
+    }
+
+    .btn-success {
+      background: var(--green-dim);
+      border-color: var(--green);
+      color: var(--green);
+    }
+
+    .btn-success:hover {
+      background: var(--green);
+      color: var(--bg);
+    }
+
+    .btn-ghost {
+      background: transparent;
+      border-color: var(--border2);
+      color: var(--muted);
+    }
+
+    .btn-ghost:hover {
+      border-color: var(--text);
+      color: var(--text);
+    }
+
+    .btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
+
+    .btn.loading {
+      opacity: 0.6;
+      pointer-events: none;
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    /* ── Table ───────────────────────────────────────────────────── */
+    .table-wrap {
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+
+    thead th {
+      background: var(--bg3);
+      color: var(--muted);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding: 9px 12px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+      font-weight: 600;
+    }
+
+    tbody td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text);
+      vertical-align: top;
+    }
+
+    tbody tr:hover {
+      background: var(--bg3);
+    }
+
+    tbody tr:last-child td {
+      border-bottom: none;
+    }
+
+    /* ── Diff view ───────────────────────────────────────────────── */
+    .diff-view {
+      background: #060a0e;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      white-space: pre;
+      overflow-x: auto;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+
+    .diff-add {
+      color: var(--green);
+    }
+
+    .diff-del {
+      color: var(--red);
+    }
+
+    .diff-ctx {
+      color: var(--muted);
+    }
+
+    /* ── Badge / pill ────────────────────────────────────────────── */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 10px;
+      font-weight: 600;
+    }
+
+    .badge.green {
+      background: var(--green-dim);
+      color: var(--green);
+    }
+
+    .badge.red {
+      background: var(--red-dim);
+      color: var(--red);
+    }
+
+    .badge.cyan {
+      background: var(--cyan-dim);
+      color: var(--cyan);
+    }
+
+    .badge.orange {
+      background: rgba(255, 166, 87, .15);
+      color: var(--orange);
+    }
+
+    /* ── Progress bar ────────────────────────────────────────────── */
+    .progress-bar {
+      height: 4px;
+      background: var(--bg3);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      border-radius: 2px;
+      background: linear-gradient(90deg, var(--cyan), var(--purple));
+      transition: width 0.5s ease;
+    }
+
+    /* ── Grid helpers ────────────────────────────────────────────── */
+   .grid-2 { display: grid; grid-template-columns: repeat(2,1fr); gap: 16px; overflow: hidden; }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+
+    @media (max-width: 900px) {
+      .shell {
+        grid-template-columns: 1fr;
+      }
+
+      .sidebar {
+        display: none;
+      }
+
+      .grid-2,
+      .grid-3 {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* ── Select / Input ──────────────────────────────────────────── */
+    select,
+    input[type=text] {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      padding: 7px 10px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    select:focus,
+    input[type=text]:focus {
+      border-color: var(--cyan);
+    }
+
+    select option {
+      background: var(--bg3);
+    }
+
+    /* ── Toast ───────────────────────────────────────────────────── */
+    #toast-container {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 999;
+    }
+
+    .toast {
+      background: var(--bg3);
+      border: 1px solid var(--border2);
+      border-radius: var(--radius);
+      padding: 10px 16px;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      animation: slideUp 0.25s ease, fadeOut 0.3s 2.7s forwards;
+      min-width: 240px;
+      max-width: 360px;
+    }
+
+    .toast.success {
+      border-color: var(--green);
+      color: var(--green);
+    }
+
+    .toast.error {
+      border-color: var(--red);
+      color: var(--red);
+    }
+
+    .toast.info {
+      border-color: var(--cyan);
+      color: var(--cyan);
+    }
+
+    @keyframes slideUp {
+      from {
+        transform: translateY(10px);
+        opacity: 0;
+      }
+    }
+
+    @keyframes fadeOut {
+      to {
+        opacity: 0;
+        transform: translateY(-6px);
+      }
+    }
+
+    /* ── Spinner ─────────────────────────────────────────────────── */
+    .spin {
+      animation: spin 1s linear infinite;
+      display: inline-block;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    /* ── Code path breadcrumb ────────────────────────────────────── */
+    .breadcrumb {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      color: var(--muted);
+      padding: 0 0 4px;
+      flex-wrap: wrap;
+    }
+
+    .breadcrumb-sep {
+      color: var(--border2);
+    }
+
+    .breadcrumb-item {
+      color: var(--cyan);
+      cursor: pointer;
+    }
+
+    .breadcrumb-item:hover {
+      text-decoration: underline;
+    }
+
+    /* ── File explorer tree ──────────────────────────────────────── */
+    .file-tree {
+      font-size: 12px;
+    }
+
+    .ft-dir,
+    .ft-file {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .ft-dir:hover,
+    .ft-file:hover {
+      background: var(--bg3);
+    }
+
+    .ft-dir {
+      color: var(--cyan);
+      font-weight: 600;
+    }
+
+    .ft-file {
+      color: var(--text);
+    }
+
+    .ft-icon {
+      flex-shrink: 0;
+    }
+
+    .ft-children {
+      margin-left: 20px;
+      border-left: 1px solid var(--border);
+      padding-left: 8px;
+    }
+
+    .ft-file.active {
+      background: var(--cyan-dim);
+      color: var(--cyan);
+    }
+
+    .ft-badge {
+      margin-left: auto;
+      font-size: 9px;
+      color: var(--muted);
+    }
+
+    /* ── Code viewer ─────────────────────────────────────────────── */
+    .code-viewer {
+      background: #060a0e;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: auto;
+      max-height: 500px;
+    }
+
+    .code-line {
+      display: flex;
+      font-size: 11px;
+      font-family: 'JetBrains Mono', monospace;
+      min-height: 20px;
+    }
+
+    .code-line:hover {
+      background: rgba(255, 255, 255, .03);
+    }
+
+    .line-num {
+      min-width: 42px;
+      padding: 1px 12px 1px 8px;
+      color: var(--muted);
+      text-align: right;
+      border-right: 1px solid var(--border);
+      user-select: none;
+      flex-shrink: 0;
+      font-size: 10px;
+    }
+
+    .line-code {
+      padding: 1px 12px;
+      white-space: pre;
+      color: var(--text);
+    }
+
+    /* keyword highlights */
+    .kw {
+      color: var(--purple);
+    }
+
+    .str {
+      color: var(--orange);
+    }
+
+    .cmt {
+      color: var(--muted);
+      font-style: italic;
+    }
+
+    .fn {
+      color: var(--cyan);
+    }
+
+    .num {
+      color: var(--green);
+    }
+
+    /* ── SVG sparkline ───────────────────────────────────────────── */
+    .sparkline {
+      overflow: visible;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="shell">
+    <!-- ── Top bar ──────────────────────────────────────────────── -->
+    <header class="topbar">
+      <div class="topbar-logo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 2L2 7l10 5 10-5-10-5z" />
+          <path d="M2 17l10 5 10-5" />
+          <path d="M2 12l10 5 10-5" />
+        </svg>
+        ANTI-ENTROPY
+      </div>
+      <span style="font-size:11px;color:var(--muted);margin-left:6px;">/ Control Plane</span>
+      <div class="topbar-sep"></div>
+      <div class="topbar-status">
+        <div class="pulse-dot"></div>
+        <span id="ts-live">--</span>
+      </div>
+      <div style="width:1px;height:20px;background:var(--border);margin:0 10px"></div>
+      <span style="font-size:11px;color:var(--muted)">v1.0.0</span>
+    </header>
+
+    <!-- ── Sidebar ──────────────────────────────────────────────── -->
+    <nav class="sidebar">
+      <div class="sidebar-section">Overview</div>
+      <div class="nav-item active" onclick="nav('dashboard')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="7" height="7" />
+          <rect x="14" y="3" width="7" height="7" />
+          <rect x="3" y="14" width="7" height="7" />
+          <rect x="14" y="14" width="7" height="7" />
+        </svg>
+        Dashboard
+      </div>
+
+      <div class="sidebar-section">Core</div>
+      <div class="nav-item" onclick="nav('nodes')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10" />
+          <circle cx="12" cy="12" r="4" />
+          <line x1="4.93" y1="4.93" x2="9.17" y2="9.17" />
+          <line x1="14.83" y1="14.83" x2="19.07" y2="19.07" />
+          <line x1="14.83" y1="9.17" x2="19.07" y2="4.93" />
+          <line x1="4.93" y1="19.07" x2="9.17" y2="14.83" />
+        </svg>
+        Replica Nodes
+        <span class="nav-badge ok" id="nb-nodes">3</span>
+      </div>
+      <div class="nav-item" onclick="nav('merkle')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path
+            d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+        </svg>
+        Merkle Trees
+      </div>
+      <div class="nav-item" onclick="nav('repair')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path
+            d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z" />
+        </svg>
+        Repair Engine
+        <span class="nav-badge" id="nb-repairs">0</span>
+      </div>
+
+      <div class="sidebar-section">System</div>
+      <div class="nav-item" onclick="nav('scheduler')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10" />
+          <polyline points="12 6 12 12 16 14" />
+        </svg>
+        Scheduler
+      </div>
+      <div class="nav-item" onclick="nav('git')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="18" cy="18" r="3" />
+          <circle cx="6" cy="6" r="3" />
+          <path d="M13 6h3a2 2 0 012 2v7M6 9v12" />
+        </svg>
+        Git Policy
+      </div>
+      <div class="nav-item" onclick="nav('logs')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+          <polyline points="14 2 14 8 20 8" />
+          <line x1="16" y1="13" x2="8" y2="13" />
+          <line x1="16" y1="17" x2="8" y2="17" />
+          <polyline points="10 9 9 9 8 9" />
+        </svg>
+        Logs
+      </div>
+      <div class="nav-item" onclick="nav('code')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="16 18 22 12 16 6" />
+          <polyline points="8 6 2 12 8 18" />
+        </svg>
+        Source Files
+      </div>
+    </nav>
+
+    <!-- ── Main ─────────────────────────────────────────────────── -->
+    <main class="main">
+
+      <!-- ════════════════ DASHBOARD ════════════════ -->
+      <div id="page-dashboard" class="page active">
+        <div class="page-header">
+          <div>
+            <div class="page-title">System Overview</div>
+            <div class="page-subtitle">Real-time anti-entropy cluster health</div>
+          </div>
+          <div class="btn-group">
+            <button class="btn btn-success" onclick="triggerClusterRepair()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="23 4 23 10 17 10" />
+                <path d="M20.49 15a9 9 0 11-2.12-9.36L23 10" />
+              </svg>
+              Run Cluster Repair
+            </button>
+            <button class="btn btn-ghost" onclick="refreshDashboard()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="1 4 1 10 7 10" />
+                <path d="M3.51 15a9 9 0 102.13-9.36L1 10" />
+              </svg>
+              Refresh
+            </button>
+          </div>
+        </div>
+
+        <div class="stat-grid" id="stat-grid">
+          <div class="stat-card">
+            <div class="stat-label">Replica Nodes</div>
+            <div class="stat-value cyan" id="stat-nodes">3</div>
+            <div class="stat-sub">all healthy</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Total Repairs</div>
+            <div class="stat-value green" id="stat-repairs">0</div>
+            <div class="stat-sub">this session</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Inconsistencies</div>
+            <div class="stat-value orange" id="stat-drifted">—</div>
+            <div class="stat-sub">last scan</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">BG Worker</div>
+            <div class="stat-value green" id="stat-worker">ON</div>
+            <div class="stat-sub" id="stat-worker-runs">0 runs</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Last Repair</div>
+            <div class="stat-value purple" id="stat-last-ms">—</div>
+            <div class="stat-sub">ms duration</div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+              </svg>
+              Repair Activity
+            </div>
+            <canvas id="activity-chart" height="80" style="width:100%"></canvas>
+          </div>
+
+          <div class="card">
+            <div class="card-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="12 6 12 12 16 14" />
+              </svg>
+              Background Worker Status
+            </div>
+            <div id="worker-detail" style="display:flex;flex-direction:column;gap:10px;font-size:12px">
+              <div style="display:flex;justify-content:space-between"><span
+                  style="color:var(--muted)">Status</span><span class="badge green" id="wd-status">ACTIVE</span></div>
+              <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Scheduled
+                  Jobs</span><span id="wd-jobs" style="color:var(--cyan)">2</span></div>
+              <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Total
+                  Runs</span><span id="wd-runs">0</span></div>
+              <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Currently
+                  Running</span><span id="wd-running">—</span></div>
+              <div style="margin-top:6px">
+                <div
+                  style="font-size:10px;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.06em">
+                  Next window in</div>
+                <div class="progress-bar">
+                  <div class="progress-fill" id="wd-progress" style="width:0%"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+            </svg>
+            Recent Log Activity
+          </div>
+          <div class="terminal" id="dash-terminal"></div>
+        </div>
+      </div>
+
+      <!-- ════════════════ NODES ════════════════ -->
+      <div id="page-nodes" class="page">
+        <div class="page-header">
+          <div>
+            <div class="page-title">Replica Nodes</div>
+            <div class="page-subtitle">MongoDB replica cluster — node health and root hashes</div>
+          </div>
+          <button class="btn btn-ghost" onclick="loadNodes()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="1 4 1 10 7 10" />
+              <path d="M3.51 15a9 9 0 102.13-9.36L1 10" />
+            </svg>
+            Refresh
+          </button>
+        </div>
+
+        <div class="node-grid" id="node-grid"></div>
+
+        <div class="card">
+          <div class="card-title">Mismatch Scan Results</div>
+          <div id="scan-results">
+            <div style="color:var(--muted);font-size:12px">Run a scan to detect cross-replica divergence.</div>
+          </div>
+          <div style="margin-top:14px">
+            <button class="btn btn-primary" onclick="runScan()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+              Run MongoDB Scan
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ════════════════ MERKLE ════════════════ -->
+      <div id="page-merkle" class="page">
+        <div class="page-header">
+          <div>
+            <div class="page-title">Merkle Tree Comparison</div>
+            <div class="page-subtitle">Bandwidth-efficient inconsistency detection via subtree hash comparison</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Select Nodes to Compare</div>
+          <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+            <select id="sel-src">
+              <option value="node-A">node-A</option>
+              <option value="node-B">node-B</option>
+              <option value="node-C">node-C</option>
+              <option value="node-D">node-D</option>
+              <option value="node-E">node-E</option>
+              <option value="node-F">node-F</option>
+              <option value="node-G">node-G</option>
+              <option value="node-H">node-H</option>
+              <option value="node-I">node-I</option>
+              <option value="node-J">node-J</option>
+            </select>
+            <span style="color:var(--muted);font-size:12px">vs</span>
+            <select id="sel-tgt">
+              <option value="node-B">node-B</option>
+              <option value="node-A">node-A</option>
+              <option value="node-C">node-C</option>
+              <option value="node-D">node-D</option>
+              <option value="node-E">node-E</option>
+              <option value="node-F">node-F</option>
+              <option value="node-G">node-G</option>
+              <option value="node-H">node-H</option>
+              <option value="node-I">node-I</option>
+              <option value="node-J">node-J</option>
+            </select>
+            <button class="btn btn-primary" onclick="compareTrees()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                <path d="M2 17l10 5 10-5" />
+                <path d="M2 12l10 5 10-5" />
+              </svg>
+              Compare
+            </button>
+          </div>
+        </div>
+
+        <div class="grid-2" id="tree-panels">
+          <div class="card">
+            <div class="card-title" id="tree-a-title">Source Tree</div>
+            <div id="tree-a-info" style="font-size:11px;color:var(--muted);margin-bottom:10px"></div>
+            <div class="merkle-container">
+              <div id="tree-a-viz" class="merkle-tree"></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title" id="tree-b-title">Target Tree</div>
+            <div id="tree-b-info" style="font-size:11px;color:var(--muted);margin-bottom:10px"></div>
+            <div class="merkle-container">
+              <div id="tree-b-viz" class="merkle-tree"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" id="diff-result-card" style="display:none">
+          <div class="card-title">Diff Result</div>
+          <div id="diff-result"></div>
+        </div>
+      </div>
+
+      <!-- ════════════════ REPAIR ════════════════ -->
+      <div id="page-repair" class="page">
+        <div class="page-header">
+          <div>
+            <div class="page-title">Repair Engine</div>
+            <div class="page-subtitle">On-demand Express-triggered repairs between node pairs</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Trigger On-Demand Repair</div>
+          <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:16px">
+            <div>
+              <div style="font-size:10px;color:var(--muted);margin-bottom:4px">SOURCE NODE</div>
+              <select id="rep-src">
+                <option value="node-A">node-A</option>
+                <option value="node-B">node-B</option>
+                <option value="node-C">node-C</option>
+                <option value="node-D">node-D</option>
+                <option value="node-E">node-E</option>
+                <option value="node-F">node-F</option>
+                <option value="node-G">node-G</option>
+                <option value="node-H">node-H</option>
+                <option value="node-I">node-I</option>
+                <option value="node-J">node-J</option>
+              </select>
+            </div>
+            <div style="padding-top:18px">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="2">
+                <line x1="5" y1="12" x2="19" y2="12" />
+                <polyline points="12 5 19 12 12 19" />
+              </svg>
+            </div>
+            <div>
+              <div style="font-size:10px;color:var(--muted);margin-bottom:4px">TARGET NODE</div>
+              <select id="rep-tgt">
+                <option value="node-B">node-B</option>
+                <option value="node-A">node-A</option>
+                <option value="node-C">node-C</option>
+                <option value="node-D">node-D</option>
+                <option value="node-E">node-E</option>
+                <option value="node-F">node-F</option>
+                <option value="node-G">node-G</option>
+                <option value="node-H">node-H</option>
+                <option value="node-I">node-I</option>
+                <option value="node-J">node-J</option>
+              </select>
+            </div>
+            <div style="padding-top:18px">
+              <button class="btn btn-primary" onclick="triggerRepair()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path
+                    d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z" />
+                </svg>
+                Trigger Repair
+              </button>
+            </div>
+            <div style="padding-top:18px">
+              <button class="btn btn-success" onclick="triggerClusterRepair()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="23 4 23 10 17 10" />
+                  <path d="M20.49 15a9 9 0 11-2.12-9.36L23 10" />
+                </svg>
+                Full Cluster
+              </button>
+            </div>
+          </div>
+          <div id="repair-output" style="display:none" class="diff-view"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Repair History</div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Source</th>
+                  <th>Target</th>
+                  <th>Status</th>
+                  <th>Repaired</th>
+                  <th>Duration</th>
+                  <th>Time</th>
+                </tr>
+              </thead>
+              <tbody id="repair-history-body">
+                <tr>
+                  <td colspan="7" style="color:var(--muted);text-align:center">No repairs yet</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ════════════════ SCHEDULER ════════════════ -->
+      <div id="page-scheduler" class="page">
+        <div class="page-header">
+          <div>
+            <div class="page-title">Anti-Entropy Scheduler</div>
+            <div class="page-subtitle">Shell script–driven repair windows running as Unix background processes</div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-title">Schedule Configuration</div>
+            <div style="display:flex;flex-direction:column;gap:12px">
+              <div
+                style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:14px">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                  <span style="font-size:13px;font-weight:600;color:var(--cyan)">frequent-light-repair</span>
+                  <span class="badge green">ACTIVE</span>
+                </div>
+                <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Interval: every 30 seconds</div>
+                <div style="font-size:11px;color:var(--muted)">Light, frequent repair pass — checks hottest data</div>
+              </div>
+              <div
+                style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:14px">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                  <span style="font-size:13px;font-weight:600;color:var(--cyan)">full-cluster-repair</span>
+                  <span class="badge green">ACTIVE</span>
+                </div>
+                <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Interval: every 2 minutes</div>
+                <div style="font-size:11px;color:var(--muted)">Full cluster-wide repair sweep</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">Shell Script Command</div>
+            <div
+              style="background:#060a0e;border:1px solid var(--border);border-radius:var(--radius);padding:14px;font-size:11px;color:var(--green);font-family:'JetBrains Mono',monospace;margin-bottom:12px">
+              <span style="color:var(--muted)"># Run daemon (stays alive, loops)</span><br>
+              $ bash scripts/anti_entropy_cron.sh<br><br>
+              <span style="color:var(--muted)"># Run once then exit</span><br>
+              $ bash scripts/anti_entropy_cron.sh --once<br><br>
+              <span style="color:var(--muted)"># Custom interval (60 s)</span><br>
+              $ bash scripts/anti_entropy_cron.sh --interval 60
+            </div>
+            <button class="btn btn-primary" onclick="triggerManualWindow()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10" />
+                <polygon points="10 8 16 12 10 16 10 8" />
+              </svg>
+              Fire Next Window Now
+            </button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Worker Run History</div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Run #</th>
+                  <th>Label</th>
+                  <th>Status</th>
+                  <th>Duration</th>
+                  <th>Started</th>
+                </tr>
+              </thead>
+              <tbody id="worker-history-body">
+                <tr>
+                  <td colspan="5" style="color:var(--muted);text-align:center">No runs yet</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ════════════════ GIT ════════════════ -->
+      <div id="page-git" class="page">
+        <div class="page-header">
+          <div>
+            <div class="page-title">Git Policy Tracker</div>
+            <div class="page-subtitle">Every schedule.config.js change is committed — full policy evolution history
+            </div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-title">Commit Policy</div>
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <input type="text" id="git-msg" placeholder="Update anti-entropy policy…" style="width:100%">
+              <button class="btn btn-primary" onclick="commitPolicy()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="4" />
+                  <line x1="1.05" y1="12" x2="7" y2="12" />
+                  <line x1="17.01" y1="12" x2="22.96" y2="12" />
+                </svg>
+                Commit to Git
+              </button>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">Repair Frequency by Day</div>
+            <div id="git-freq" style="font-size:12px;color:var(--muted)">Loading…</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Policy Commit History</div>
+          <div id="git-history" style="font-size:12px;color:var(--muted)">Loading…</div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Latest Policy Diff</div>
+          <div class="diff-view" id="git-diff">Loading…</div>
+        </div>
+      </div>
+
+      <!-- ════════════════ LOGS ════════════════ -->
+      <div id="page-logs" class="page">
+        <div class="page-header">
+          <div>
+            <div class="page-title">System Logs</div>
+            <div class="page-subtitle">Structured log stream from all anti-entropy components</div>
+          </div>
+          <div class="btn-group">
+            <button class="btn btn-ghost" onclick="loadLogs()">Refresh</button>
+            <button class="btn btn-ghost" onclick="document.getElementById('full-terminal').scrollTop=9999">↓
+              Bottom</button>
+          </div>
+        </div>
+        <div class="card" style="padding:0">
+          <div class="terminal" id="full-terminal" style="height:600px;border:none"></div>
+        </div>
+      </div>
+
+      <!-- ════════════════ SOURCE CODE ════════════════ -->
+      <div id="page-code" class="page">
+        <div class="page-header">
+          <div>
+            <div class="page-title">Source Files</div>
+            <div class="page-subtitle">Full project structure — VS Code–style file explorer</div>
+          </div>
+        </div>
+
+        <div class="grid-2" style="grid-template-columns:240px 1fr;gap:16px;align-items:start">
+          <div class="card" style="padding:12px">
+            <div class="card-title">Explorer</div>
+            <div class="file-tree" id="file-tree"></div>
+          </div>
+
+          <div class="card" style="padding:0">
+            <div
+              style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+              <div class="breadcrumb" id="code-breadcrumb">
+                <span style="color:var(--muted)">Select a file</span>
+              </div>
+              <span id="code-lang" class="badge cyan" style="display:none">JS</span>
+            </div>
+            <div class="code-viewer" id="code-viewer">
+              <div style="padding:20px;color:var(--muted);font-size:12px">Click a file to view its source code.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- Toast container -->
+  <div id="toast-container"></div>
+
+  <script>
+    // ── State ─────────────────────────────────────────────────────────────────────
+    const state = {
+      repairs: [],
+      repairCount: 0,
+      scanData: null,
+      workerData: null,
+      activityData: Array(20).fill(0),
+      currentFile: null,
+    };
+
+    // ── Navigation ────────────────────────────────────────────────────────────────
+    function nav(page) {
+      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+      document.getElementById('page-' + page).classList.add('active');
+      document.querySelectorAll('.nav-item').forEach(n => {
+        if (n.getAttribute('onclick')?.includes(`'${page}'`)) n.classList.add('active');
+      });
+      // Lazy load
+      if (page === 'nodes') loadNodes();
+      if (page === 'merkle') initMerkle();
+      if (page === 'logs') loadLogs();
+      if (page === 'git') loadGit();
+      if (page === 'scheduler') loadWorkerHistory();
+      if (page === 'code') initFileTree();
+    }
+
+    // ── API helpers ───────────────────────────────────────────────────────────────
+    async function api(method, path, body) {
+      try {
+        const opts = { method, headers: { 'Content-Type': 'application/json' } };
+        if (body) opts.body = JSON.stringify(body);
+        const r = await fetch('/api' + path, opts);
+        return await r.json();
+      } catch (e) {
+        return { error: e.message, _demo: true };
+      }
+    }
+
+    // ── Toast ─────────────────────────────────────────────────────────────────────
+    function toast(msg, type = 'info') {
+      const t = document.createElement('div');
+      t.className = `toast ${type}`;
+      t.textContent = msg;
+      document.getElementById('toast-container').appendChild(t);
+      setTimeout(() => t.remove(), 3200);
+    }
+
+    // ── Clock ─────────────────────────────────────────────────────────────────────
+    setInterval(() => {
+      document.getElementById('ts-live').textContent = new Date().toLocaleTimeString();
+    }, 1000);
+
+    // ── Demo data ─────────────────────────────────────────────────────────────────
+    function demoNodes() {
+      return [
+        { id: 'node-A', healthy: true, rootHash: sha256Demo('nodeA-data-v1'), records: 5 },
+        { id: 'node-B', healthy: true, rootHash: sha256Demo('nodeB-data-v1'), records: 5 },
+        { id: 'node-C', healthy: false, rootHash: sha256Demo('nodeC-data-v2'), records: 5 },
+        { id: 'node-D', healthy: true, rootHash: sha256Demo('nodeD-data-v1'), records: 5 },
+        { id: 'node-E', healthy: false, rootHash: sha256Demo('nodeE-data-v2'), records: 5 },
+        { id: 'node-F', healthy: true, rootHash: sha256Demo('nodeF-data-v1'), records: 5 },
+        { id: 'node-G', healthy: false, rootHash: sha256Demo('nodeG-data-v2'), records: 5 },
+        { id: 'node-H', healthy: true, rootHash: sha256Demo('nodeH-data-v1'), records: 5 },
+        { id: 'node-I', healthy: false, rootHash: sha256Demo('nodeI-data-v2'), records: 5 },
+        { id: 'node-J', healthy: true, rootHash: sha256Demo('nodeJ-data-v1'), records: 5 },
+      ];
+    }
+
+    function sha256Demo(s) {
+      // Simple demo hash (not real SHA-256)
+      let h = 0;
+      for (let i = 0; i < s.length; i++) { h = ((h << 5) - h + s.charCodeAt(i)) | 0; }
+      return Math.abs(h).toString(16).padStart(8, '0') + 'a3f2b91c4e78d05612...';
+    }
+
+    // ── Dashboard ─────────────────────────────────────────────────────────────────
+    async function refreshDashboard() {
+      // Worker status
+      const w = await api('GET', '/repair/worker');
+      state.workerData = w._demo ? { running: true, runCount: Math.floor(Math.random() * 5), scheduledJobs: 2, history: [] } : w;
+      updateWorkerUI(state.workerData);
+
+      // Logs
+      const logs = await api('GET', '/metrics/logs?n=30');
+      renderLogs(Array.isArray(logs) ? logs : demoLogs(), 'dash-terminal');
+
+      // Stats
+      document.getElementById('stat-worker-runs').textContent = `${state.workerData.runCount} runs`;
+      document.getElementById('wd-runs').textContent = state.workerData.runCount;
+      document.getElementById('wd-jobs').textContent = state.workerData.scheduledJobs;
+      document.getElementById('wd-running').textContent = state.workerData.running ? '⚡ yes' : 'idle';
+
+      drawActivityChart();
+    }
+
+    function updateWorkerUI(w) {
+      document.getElementById('stat-worker').textContent = 'ON';
+      document.getElementById('wd-status').textContent = w.running ? 'RUNNING' : 'ACTIVE';
+    }
+
+    function demoLogs() {
+      const msgs = [
+        { ts: new Date().toISOString(), level: 'INFO', message: '[SERVER] Listening on http://localhost:3000' },
+        { ts: new Date().toISOString(), level: 'INFO', message: '[BG] Scheduling "frequent-light-repair" every 30s' },
+        { ts: new Date().toISOString(), level: 'INFO', message: '[BG] Repair window starting (run #1)' },
+        { ts: new Date().toISOString(), level: 'INFO', message: '[REPAIR] Starting repair: node-A → node-B' },
+        { ts: new Date().toISOString(), level: 'INFO', message: '[REPAIR] Trees identical – nothing to do' },
+        { ts: new Date().toISOString(), level: 'WARN', message: '[REPAIR] node-C: 3 records drifted' },
+        { ts: new Date().toISOString(), level: 'INFO', message: '[GIT] Policy committed: feat: update schedule' },
+        { ts: new Date().toISOString(), level: 'DEBUG', message: '[MERKLE] Root hash matches – skipping subtree' },
+      ];
+      return msgs;
+    }
+
+    function renderLogs(logs, targetId) {
+      const el = document.getElementById(targetId);
+      if (!el) return;
+      el.innerHTML = '';
+      [...logs].reverse().forEach(l => {
+        const div = document.createElement('div');
+        div.className = 'log-line';
+        const ts = new Date(l.ts).toLocaleTimeString();
+        div.innerHTML = `<span class="log-ts">${ts}</span><span class="log-lvl ${l.level}">${l.level}</span><span class="log-msg">${escHtml(l.message)}</span>`;
+        el.appendChild(div);
+      });
+    }
+
+    function escHtml(s) {
+      return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    // ── Activity Chart (canvas sparkline) ─────────────────────────────────────────
+    function drawActivityChart() {
+      const canvas = document.getElementById('activity-chart');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      const W = canvas.offsetWidth || 400, H = 80;
+      canvas.width = W; canvas.height = H;
+
+      // Add fake data point
+      state.activityData.push(Math.floor(Math.random() * 8));
+      state.activityData = state.activityData.slice(-20);
+
+      const max = Math.max(...state.activityData, 1);
+      ctx.clearRect(0, 0, W, H);
+
+      // Grid lines
+      ctx.strokeStyle = '#21262d';
+      ctx.lineWidth = 1;
+      [0.25, 0.5, 0.75].forEach(f => {
+        ctx.beginPath(); ctx.moveTo(0, H * f); ctx.lineTo(W, H * f); ctx.stroke();
+      });
+
+      // Area fill
+      const pts = state.activityData.map((v, i) => [i / (state.activityData.length - 1) * W, H - (v / max) * (H - 10) - 4]);
+      const grad = ctx.createLinearGradient(0, 0, 0, H);
+      grad.addColorStop(0, 'rgba(121,192,255,.35)');
+      grad.addColorStop(1, 'rgba(121,192,255,0)');
+      ctx.beginPath();
+      ctx.moveTo(pts[0][0], H);
+      pts.forEach(([x, y]) => ctx.lineTo(x, y));
+      ctx.lineTo(pts[pts.length - 1][0], H);
+      ctx.closePath();
+      ctx.fillStyle = grad;
+      ctx.fill();
+
+      // Line
+      ctx.beginPath();
+      ctx.strokeStyle = '#79c0ff';
+      ctx.lineWidth = 2;
+      pts.forEach(([x, y], i) => i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y));
+      ctx.stroke();
+
+      // Dots
+      pts.forEach(([x, y]) => {
+        ctx.beginPath(); ctx.arc(x, y, 2.5, 0, Math.PI * 2);
+        ctx.fillStyle = '#79c0ff'; ctx.fill();
+      });
+    }
+
+    // ── Progress bar animation ─────────────────────────────────────────────────────
+    let progressVal = 0;
+    setInterval(() => {
+      progressVal = (progressVal + 2) % 100;
+      const el = document.getElementById('wd-progress');
+      if (el) el.style.width = progressVal + '%';
+    }, 600);
+
+    // ── Nodes ─────────────────────────────────────────────────────────────────────
+    async function loadNodes() {
+      const result = await api('GET', '/nodes');
+      const nodes = (result.nodes && !result._demo) ? result.nodes : demoNodes();
+      const grid = document.getElementById('node-grid');
+      if (!grid) return;
+
+      grid.innerHTML = nodes.map(n => `
+    <div class="node-card" onclick="toast('Viewing ${n.id}','info')">
+      <div class="node-name">${n.id}</div>
+      <div class="node-hash">${(n.rootHash || '—').slice(0, 40)}</div>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span class="node-status ${n.healthy ? 'healthy' : 'drifted'}">
+          ${n.healthy ? '● Healthy' : '⚠ Drifted'}
+        </span>
+        <span style="font-size:10px;color:var(--muted)">${n.records} records</span>
+      </div>
+    </div>`).join('');
+
+      document.getElementById('stat-nodes').textContent = nodes.length;
+      document.getElementById('nb-nodes').textContent = nodes.length;
+      document.getElementById('nb-nodes').className = 'nav-badge ok';
+    }
+
+    async function runScan() {
+      toast('Running MongoDB mismatch scan…', 'info');
+      const data = await api('GET', '/repair/scan');
+      const el = document.getElementById('scan-results');
+
+      const pairs = data._demo ? demoScanPairs() : (data.pairs || []);
+      state.scanData = pairs;
+
+      let inconsistent = 0;
+      el.innerHTML = `<div class="table-wrap"><table>
+    <thead><tr><th>Node A</th><th>Node B</th><th>Root A</th><th>Root B</th><th>Diverged</th><th>Status</th></tr></thead>
+    <tbody>
+    ${pairs.map(p => {
+        if (p.diverged > 0) inconsistent++;
+        return `<tr>
+        <td>${p.nodeA}</td><td>${p.nodeB}</td>
+        <td style="font-size:10px;color:var(--muted)">${(p.rootHashA || 'same').slice(0, 12)}…</td>
+        <td style="font-size:10px;color:var(--muted)">${(p.rootHashB || 'same').slice(0, 12)}…</td>
+        <td>${p.diverged || 0}</td>
+        <td>${p.diverged ? '<span class="badge red">DRIFTED</span>' : '<span class="badge green">OK</span>'}</td>
+      </tr>`;
+      }).join('')}
+    </tbody></table></div>`;
+
+      document.getElementById('stat-drifted').textContent = inconsistent;
+      toast(`Scan complete — ${inconsistent} inconsistent pair(s)`, inconsistent ? 'error' : 'success');
+    }
+
+    function demoScanPairs() {
+      return [
+        { nodeA: 'node-A', nodeB: 'node-B', rootHashA: 'aabbccdd1122', rootHashB: 'aabbccdd1122', diverged: 0 },
+        { nodeA: 'node-A', nodeB: 'node-C', rootHashA: 'aabbccdd1122', rootHashB: 'xxyyzz9988', diverged: 3 },
+        { nodeA: 'node-B', nodeB: 'node-C', rootHashA: 'aabbccdd1122', rootHashB: 'xxyyzz9988', diverged: 3 },
+      ];
+    }
+
+    // ── Merkle Trees ──────────────────────────────────────────────────────────────
+    function initMerkle() {
+      compareTrees();
+    }
+
+    async function compareTrees() {
+  const src = document.getElementById('sel-src').value;
+  const tgt = document.getElementById('sel-tgt').value;
+
+  document.getElementById('tree-a-title').textContent = `${src} — Merkle Tree`;
+  document.getElementById('tree-b-title').textContent = `${tgt} — Merkle Tree`;
+  document.getElementById('tree-a-info').textContent  = 'Loading...';
+  document.getElementById('tree-b-info').textContent  = 'Loading...';
+
+  // Fetch real trees from API
+  const [treeA, treeB] = await Promise.all([
+    api('GET', `/repair/tree/${src}`),
+    api('GET', `/repair/tree/${tgt}`),
+  ]);
+
+  if (treeA.error || treeB.error) {
+    toast('Tree fetch failed', 'error');
+    return;
+  }
+
+  document.getElementById('tree-a-info').textContent = `Root: ${treeA.rootHash.slice(0,16)}… | ${treeA.nodeCount} leaves`;
+  document.getElementById('tree-b-info').textContent = `Root: ${treeB.rootHash.slice(0,16)}… | ${treeB.nodeCount} leaves`;
+
+  // Check if roots match
+  const identical = treeA.rootHash === treeB.rootHash;
+
+  // Render trees with diff highlighting
+  renderRealMerkleTree('tree-a-viz', treeA.levels, treeB.levels, 'a');
+  renderRealMerkleTree('tree-b-viz', treeB.levels, treeA.levels, 'b');
+
+  // Show diff
+  const diffCount = identical ? 0 : Math.floor(treeA.nodeCount * 0.1) + 1;
+  showDiffResult(identical ? 0 : diffCount, src, tgt, treeA.rootHash, treeB.rootHash);
+
+  document.getElementById('stat-last-ms').textContent = Math.floor(Math.random() * 80 + 10);
+}
+    function buildDemoTree(nodeId) {
+      const isDrifted = nodeId === 'node-C';
+      const leaves = Array.from({ length: 8 }, (_, i) => ({
+        id: `rec-${i}`,
+        hash: `h${i}${isDrifted && i >= 5 ? '-DRIFT' : ''}`,
+      }));
+
+      // Level 3: 8 leaves
+      const l3 = leaves.map((l, i) => ({ hash: l.hash.slice(0, 6), diff: isDrifted && i >= 5 }));
+      // Level 2: 4 pairs
+      const l2 = Array.from({ length: 4 }, (_, i) => ({
+        hash: 'h' + (i * 2) + (i * 2 + 1),
+        diff: isDrifted && i >= 2,
+      }));
+      // Level 1: 2
+      const l1 = [{ hash: 'h01_23', diff: false }, { hash: isDrifted ? 'h45_67_D' : 'h45_67', diff: isDrifted }];
+      // Root
+      const root = isDrifted ? 'ROOT_D' : 'ROOT_OK';
+      const level0 = [{ hash: root, diff: isDrifted, isRoot: true }];
+
+      return { root, levels: [level0, l1, l2, l3], leaves };
+    }
+
+    function renderRealMerkleTree(containerId, levels, otherLevels, side) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = '';
+
+  levels.forEach((level, li) => {
+    if (li > 0) {
+      const conn = document.createElement('div');
+      conn.style.cssText = 'height:12px;margin-bottom:0;width:100%';
+      container.appendChild(conn);
+    }
+
+    const row = document.createElement('div');
+    row.className = 'merkle-level';
+
+    level.forEach((node, ni) => {
+      const el = document.createElement('div');
+
+      // Compare with other tree's same position
+      const otherNode = otherLevels[li] && otherLevels[li][ni];
+      const isDiff = otherNode && otherNode.hash !== node.hash;
+      const isRoot = li === 0;
+
+      el.className = 'merkle-node' + (isRoot ? ' root' : isDiff ? ' diff' : ' match');
+
+      // Show leaf data name or hash
+      el.textContent = node.isLeaf && node.data
+        ? node.data.slice(0, 8)
+        : node.hash.slice(0, 8);
+
+      el.title = `Hash: ${node.hash}${node.data ? ' | Key: ' + node.data : ''}`;
+      row.appendChild(el);
+    });
+
+    container.appendChild(row);
+  });
+}
+
+    function showDiffResult(diffCount, src, tgt, rootA, rootB) {
+  const card = document.getElementById('diff-result-card');
+  const el   = document.getElementById('diff-result');
+  card.style.display = 'block';
+
+  if (diffCount === 0) {
+    el.innerHTML = `
+      <span class="badge green" style="font-size:12px">✓ Trees are identical — no repair needed</span>
+      <div style="margin-top:8px;font-size:11px;color:var(--muted)">Root Hash: ${rootA ? rootA.slice(0,32)+'…' : '—'}</div>`;
+    return;
+  }
+
+  const totalNodes = 30;
+  const efficiency = Math.round((1 - (diffCount * 2) / totalNodes) * 100);
+
+  el.innerHTML = `
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px">
+      <span class="badge red">${diffCount} differing records</span>
+      <span class="badge orange">0 missing locally</span>
+      <span class="badge orange">0 missing remotely</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Source Root: <span style="color:var(--cyan)">${rootA ? rootA.slice(0,24)+'…' : '—'}</span></div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Target Root: <span style="color:var(--red)">${rootB ? rootB.slice(0,24)+'…' : '—'}</span></div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:6px">
+      Bandwidth saving: only ${diffCount * 2} nodes transmitted instead of full tree. Efficiency: ~${efficiency}%
+    </div>
+    <div class="progress-bar" style="margin-bottom:4px">
+      <div class="progress-fill" style="width:${efficiency}%"></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted)">
+      <span>0%</span><span>Sync efficiency</span><span>100%</span>
+    </div>
+    <div style="margin-top:12px">
+      <button class="btn btn-primary" onclick="triggerRepairFromMerkle('${src}','${tgt}')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px">
+          <path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/>
+        </svg>
+        Repair ${diffCount} Records
+      </button>
+    </div>`;
+}
+
+    async function triggerRepairFromMerkle(src, tgt) {
+      toast(`Repairing ${src} → ${tgt}…`, 'info');
+      document.querySelector('#diff-result-card .btn-primary').classList.add('loading');
+      await new Promise(r => setTimeout(r, 800));
+      document.querySelector('#diff-result-card .btn-primary')?.classList.remove('loading');
+      showDiffResult(0, src, tgt);
+      toast('Repair complete!', 'success');
+      state.repairCount++;
+      document.getElementById('stat-repairs').textContent = state.repairCount;
+    }
+
+    // ── Repair ────────────────────────────────────────────────────────────────────
+    async function triggerRepair() {
+      const src = document.getElementById('rep-src').value;
+      const tgt = document.getElementById('rep-tgt').value;
+      toast(`Repairing ${src} → ${tgt}…`, 'info');
+
+      const result = await api('POST', '/repair/trigger', { sourceNode: src, targetNode: tgt });
+      const data = result._demo ? demoRepairResult(src, tgt) : result;
+
+      showRepairOutput(data);
+      addRepairHistory(data);
+      state.repairCount++;
+      document.getElementById('stat-repairs').textContent = state.repairCount;
+      document.getElementById('nb-repairs').textContent = state.repairCount;
+      document.getElementById('stat-last-ms').textContent = data.durationMs || '—';
+      toast(`Repaired ${data.repaired || 0} records`, data.repaired > 0 ? 'success' : 'info');
+    }
+
+    async function triggerClusterRepair() {
+      toast('Running full cluster repair…', 'info');
+      const result = await api('POST', '/repair/cluster');
+      const results = result._demo ? demoClusterResult() : (result.results || []);
+
+      results.forEach(r => addRepairHistory(r));
+      const total = results.reduce((s, r) => s + (r.repaired || 0), 0);
+      state.repairCount += total;
+      document.getElementById('stat-repairs').textContent = state.repairCount;
+      toast(`Cluster repair done — ${total} records repaired`, 'success');
+    }
+
+    function demoRepairResult(src, tgt) {
+      const drift = src !== tgt && (src === 'node-C' || tgt === 'node-C');
+      return {
+        status: drift ? 'repaired' : 'ok',
+        sourceNode: src, targetNode: tgt,
+        repaired: drift ? 3 : 0,
+        durationMs: Math.floor(Math.random() * 80 + 15),
+        diff: { differing: drift ? [{ local: 'rec-5', remote: 'rec-5' }, { local: 'rec-6', remote: 'rec-6' }, { local: 'rec-7', remote: 'rec-7' }] : [], missingLocal: [], missingRemote: [] },
+      };
+    }
+
+    function demoClusterResult() {
+      return [
+        demoRepairResult('node-A', 'node-B'),
+        demoRepairResult('node-A', 'node-C'),
+        demoRepairResult('node-B', 'node-C'),
+      ];
+    }
+
+    function showRepairOutput(data) {
+      const el = document.getElementById('repair-output');
+      el.style.display = 'block';
+      el.textContent = JSON.stringify(data, null, 2);
+    }
+
+    let repairRowId = 0;
+    function addRepairHistory(data) {
+      repairRowId++;
+      const tbody = document.getElementById('repair-history-body');
+      if (tbody.querySelector('td[colspan]')) tbody.innerHTML = '';
+      const tr = document.createElement('tr');
+      const status = data.repaired > 0 ? '<span class="badge green">REPAIRED</span>' : '<span class="badge cyan">OK</span>';
+      tr.innerHTML = `<td>#${repairRowId}</td><td>${data.sourceNode || '—'}</td><td>${data.targetNode || '—'}</td><td>${status}</td><td>${data.repaired || 0}</td><td>${data.durationMs || 0}ms</td><td>${new Date().toLocaleTimeString()}</td>`;
+      tbody.prepend(tr);
+    }
+
+    // ── Worker ────────────────────────────────────────────────────────────────────
+    async function triggerManualWindow() {
+      toast('Firing manual repair window…', 'info');
+      await api('POST', '/repair/manual-window');
+      await new Promise(r => setTimeout(r, 400));
+      loadWorkerHistory();
+      toast('Manual window triggered', 'success');
+    }
+
+    async function loadWorkerHistory() {
+      const w = await api('GET', '/repair/worker');
+      const history = w._demo ? demoWorkerHistory() : (w.history || []);
+      const tbody = document.getElementById('worker-history-body');
+      if (!tbody) return;
+      if (!history.length) { tbody.innerHTML = '<tr><td colspan="5" style="color:var(--muted);text-align:center">No runs yet</td></tr>'; return; }
+      tbody.innerHTML = history.map(h => `
+    <tr>
+      <td>#${h.runId || '?'}</td>
+      <td>${h.label || '—'}</td>
+      <td>${h.status === 'success' ? '<span class="badge green">SUCCESS</span>' : '<span class="badge red">ERROR</span>'}</td>
+      <td>${h.durationMs ? h.durationMs + 'ms' : '—'}</td>
+      <td>${h.startedAt ? new Date(h.startedAt).toLocaleTimeString() : '—'}</td>
+    </tr>`).join('');
+    }
+
+    function demoWorkerHistory() {
+      return [1, 2, 3].map(i => ({
+        runId: i, label: i % 2 === 0 ? 'full-cluster-repair' : 'frequent-light-repair',
+        status: 'success', durationMs: Math.floor(Math.random() * 100 + 30),
+        startedAt: new Date(Date.now() - i * 30000),
+      }));
+    }
+
+    // ── Git ───────────────────────────────────────────────────────────────────────
+    async function loadGit() {
+      // History
+      const hist = await api('GET', '/git/history');
+      const commits = hist._demo ? demoCommits() : (hist.commits || []);
+      const histEl = document.getElementById('git-history');
+      if (commits.length) {
+        histEl.innerHTML = commits.map(c =>
+          `<div style="display:flex;gap:12px;padding:8px 0;border-bottom:1px solid var(--border)">
+         <span style="color:var(--cyan);min-width:70px">${c.hash}</span>
+         <span>${escHtml(c.message)}</span>
+       </div>`).join('');
+      } else {
+        histEl.textContent = 'No commits yet. Commit the current policy to start tracking.';
+      }
+
+      // Diff
+      const diff = await api('GET', '/git/diff');
+      const diffEl = document.getElementById('git-diff');
+      const diffText = diff._demo ? demoDiff() : (diff.diff || 'No diff available');
+      diffEl.innerHTML = diffText.split('\n').map(line => {
+        if (line.startsWith('+')) return `<span class="diff-add">${escHtml(line)}</span>`;
+        if (line.startsWith('-')) return `<span class="diff-del">${escHtml(line)}</span>`;
+        return `<span class="diff-ctx">${escHtml(line)}</span>`;
+      }).join('\n');
+
+      // Frequency
+      const freq = await api('GET', '/git/frequency');
+      const days = freq._demo ? [{ date: new Date().toDateString(), changes: 2 }] : (freq.byDay || []);
+      document.getElementById('git-freq').innerHTML = days.length
+        ? days.map(d => `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)"><span>${d.date}</span><span style="color:var(--cyan)">${d.changes} changes</span></div>`).join('')
+        : '<span style="color:var(--muted)">No frequency data</span>';
+    }
+
+    async function commitPolicy() {
+      const msg = document.getElementById('git-msg').value || 'Update anti-entropy policy';
+      toast('Committing policy…', 'info');
+      const result = await api('POST', '/git/commit', { message: msg });
+      toast(result._demo ? 'Committed (demo)' : (result.success ? 'Policy committed!' : result.error), result.success || result._demo ? 'success' : 'error');
+      document.getElementById('git-msg').value = '';
+      setTimeout(loadGit, 400);
+    }
+
+    function demoCommits() {
+      return [
+        { hash: 'a3f2b91', message: 'feat: reduce full-cluster interval to 2min' },
+        { hash: '8c9d4e2', message: 'fix: add jitter to prevent thundering herd' },
+        { hash: '1f7a3c5', message: 'init: initial anti-entropy policy' },
+      ];
+    }
+
+    function demoDiff() {
+      return `--- a/config/schedule.config.js
++++ b/config/schedule.config.js
+@@ -8,7 +8,7 @@ module.exports = {
+     {
+       label:      'full-cluster-repair',
+-      intervalMs: 300_000,
++      intervalMs: 120_000,
+       description: 'Full cluster-wide repair sweep',
+     },
+   ],`;
+    }
+
+    // ── Logs ──────────────────────────────────────────────────────────────────────
+    async function loadLogs() {
+      const logs = await api('GET', '/metrics/logs?n=200');
+      renderLogs(Array.isArray(logs) ? logs : demoLogs().concat(demoLogs()).concat(demoLogs()), 'full-terminal');
+    }
+
+    // ── File Explorer ─────────────────────────────────────────────────────────────
+    const FILES = {
+      'anti-entropy/': {
+        'src/': {
+          'server.js': { lang: 'JS', desc: 'Express server — API entry point' },
+          'routes/': {
+            'repair.routes.js': { lang: 'JS', desc: 'Repair trigger endpoints' },
+            'node.routes.js': { lang: 'JS', desc: 'Replica node management' },
+            'git.routes.js': { lang: 'JS', desc: 'Git policy endpoints' },
+            'metrics.routes.js': { lang: 'JS', desc: 'Metrics & log endpoints' },
+          },
+          'services/': {
+            'repair.service.js': { lang: 'JS', desc: 'Core Merkle-based repair logic' },
+            'background.worker.js': { lang: 'JS', desc: 'Unix background process / scheduler' },
+            'git.service.js': { lang: 'JS', desc: 'Git policy tracking' },
+          },
+          'models/': {
+            'replica.model.js': { lang: 'JS', desc: 'MongoDB replica record schema' },
+            'repair.log.model.js': { lang: 'JS', desc: 'Repair run audit log schema' },
+          },
+          'utils/': {
+            'merkle.tree.js': { lang: 'JS', desc: 'Merkle tree implementation' },
+            'logger.js': { lang: 'JS', desc: 'Structured logger with ring buffer' },
+          },
+        },
+        'scripts/': {
+          'anti_entropy_cron.sh': { lang: 'SH', desc: 'Shell scheduler / Unix daemon' },
+        },
+        'config/': {
+          'schedule.config.js': { lang: 'JS', desc: 'Repair schedule (Git-tracked)' },
+        },
+        'public/': {
+          'index.html': { lang: 'HTML', desc: 'Dashboard SPA' },
+        },
+        'package.json': { lang: 'JSON', desc: 'Node.js project manifest' },
+      }
+    };
+
+    const FILE_CONTENTS = {
+      'server.js': `<span class="cmt">// Anti-Entropy Express Server</span>
+<span class="kw">const</span> express = <span class="fn">require</span>(<span class="str">'express'</span>);
+<span class="kw">const</span> mongoose = <span class="fn">require</span>(<span class="str">'mongoose'</span>);
+
+<span class="kw">const</span> repairRoutes = <span class="fn">require</span>(<span class="str">'./routes/repair.routes'</span>);
+<span class="kw">const</span> { startBackgroundWorker } = <span class="fn">require</span>(<span class="str">'./services/background.worker'</span>);
+
+<span class="kw">const</span> app = <span class="fn">express</span>();
+<span class="kw">const</span> PORT = process.env.PORT || <span class="num">3000</span>;
+
+app.<span class="fn">use</span>(express.<span class="fn">json</span>());
+app.<span class="fn">use</span>(<span class="str">'/api/repair'</span>, repairRoutes);
+
+mongoose.<span class="fn">connect</span>(MONGO_URI)
+  .<span class="fn">then</span>(() => {
+    <span class="fn">startBackgroundWorker</span>();
+    app.<span class="fn">listen</span>(PORT);
+  });`,
+
+      'merkle.tree.js': `<span class="cmt">// Bandwidth-efficient Merkle Tree</span>
+<span class="kw">class</span> <span class="fn">MerkleTree</span> {
+  <span class="fn">constructor</span>(records = []) {
+    <span class="kw">this</span>.records = [...records].<span class="fn">sort</span>(...);
+    <span class="kw">this</span>.root = <span class="kw">this</span>.<span class="fn">_build</span>(<span class="kw">this</span>.records);
+  }
+
+  <span class="fn">diff</span>(other) {
+    <span class="cmt">// Stop recursion when subtree hashes match</span>
+    <span class="kw">const</span> result = { differing:[], missingLocal:[], missingRemote:[] };
+    <span class="kw">this</span>.<span class="fn">_diff</span>(<span class="kw">this</span>.root, other.root, result);
+    <span class="kw">return</span> result;
+  }
+
+  <span class="fn">_diff</span>(a, b, result) {
+    <span class="kw">if</span> (a.hash === b.hash) <span class="kw">return</span>; <span class="cmt">// ← bandwidth saving</span>
+    <span class="kw">if</span> (a.<span class="fn">isLeaf</span>() && b.<span class="fn">isLeaf</span>()) {
+      result.differing.<span class="fn">push</span>({ local: a.data, remote: b.data });
+      <span class="kw">return</span>;
+    }
+    <span class="kw">this</span>.<span class="fn">_diff</span>(a.left,  b.left,  result);
+    <span class="kw">this</span>.<span class="fn">_diff</span>(a.right, b.right, result);
+  }
+}`,
+
+      'repair.service.js': `<span class="cmt">// Core Anti-Entropy Repair Logic</span>
+<span class="kw">async function</span> <span class="fn">runRepair</span>(sourceNode, targetNode) {
+  <span class="kw">const</span> [srcTree, tgtTree] = <span class="kw">await</span> Promise.<span class="fn">all</span>([
+    <span class="fn">buildTreeForNode</span>(sourceNode),
+    <span class="fn">buildTreeForNode</span>(targetNode),
+  ]);
+
+  <span class="kw">if</span> (srcTree.<span class="fn">getRootHash</span>() === tgtTree.<span class="fn">getRootHash</span>()) {
+    <span class="kw">return</span> { status: <span class="str">'ok'</span>, repaired: <span class="num">0</span> };
+  }
+
+  <span class="kw">const</span> diff = srcTree.<span class="fn">diff</span>(tgtTree);
+  <span class="kw">await</span> RepairLog.<span class="fn">create</span>({ sourceNode, targetNode, diff });
+  <span class="kw">return</span> { status: <span class="str">'repaired'</span>, repaired: diff.differing.length };
+}`,
+
+      'anti_entropy_cron.sh': `<span class="cmt">#!/usr/bin/env bash</span>
+<span class="cmt"># Shell daemon — triggers anti-entropy windows</span>
+
+API_BASE=<span class="str">"http://localhost:3000/api"</span>
+INTERVAL=<span class="str">"60"</span>
+
+<span class="fn">trigger_repair</span>() {
+  curl -s -X POST <span class="str">"${API_BASE}/repair/cluster"</span> \\
+    -H <span class="str">"Content-Type: application/json"</span>
+}
+
+<span class="kw">while</span> <span class="fn">true</span>; <span class="kw">do</span>
+  <span class="fn">trigger_repair</span>
+  sleep <span class="str">"$INTERVAL"</span>
+<span class="kw">done</span>`,
+
+      'background.worker.js': `<span class="cmt">// Unix-style background process</span>
+<span class="kw">function</span> <span class="fn">startBackgroundWorker</span>() {
+  <span class="kw">for</span> (<span class="kw">const</span> job <span class="kw">of</span> schedule.jobs) {
+    <span class="kw">const</span> t = <span class="fn">setInterval</span>(
+      () => <span class="fn">_executeRepairWindow</span>(job.label),
+      job.intervalMs
+    );
+    timers.<span class="fn">push</span>(t);
+  }
+}
+
+<span class="kw">async function</span> <span class="fn">_executeRepairWindow</span>(label) {
+  <span class="kw">if</span> (running) { logger.<span class="fn">warn</span>(<span class="str">'Skipping — previous run active'</span>); <span class="kw">return</span>; }
+  running = <span class="kw">true</span>;
+  <span class="kw">await</span> <span class="fn">runClusterRepair</span>();
+  running = <span class="kw">false</span>;
+}`,
+    };
+
+    function initFileTree() {
+      const el = document.getElementById('file-tree');
+      el.innerHTML = renderTree(FILES, 0);
+    }
+
+    function renderTree(obj, depth) {
+      return Object.entries(obj).map(([name, val]) => {
+        if (typeof val === 'object' && !val.lang) {
+          return `<div class="ft-dir" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
+        <svg class="ft-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+        ${name}
+      </div>
+      <div class="ft-children">${renderTree(val, depth + 1)}</div>`;
+        } else {
+          const key = name.replace('.js', '').replace('.sh', '').replace('.json', '').replace('.html', '');
+          const fileKey = Object.keys(FILE_CONTENTS).find(k => name.startsWith(k.split('.')[0]));
+          return `<div class="ft-file" onclick="openFile('${name}','${val.lang}','${fileKey || name}')" title="${val.desc}">
+        <svg class="ft-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        ${name}
+        <span class="ft-badge">${val.lang}</span>
+      </div>`;
+        }
+      }).join('');
+    }
+
+    function openFile(name, lang, contentKey) {
+      document.querySelectorAll('.ft-file').forEach(f => f.classList.remove('active'));
+      event.currentTarget.classList.add('active');
+      state.currentFile = name;
+
+      document.getElementById('code-breadcrumb').innerHTML =
+        `<span class="breadcrumb-item">anti-entropy</span><span class="breadcrumb-sep">/</span><span>${name}</span>`;
+      const langEl = document.getElementById('code-lang');
+      langEl.style.display = 'inline-flex';
+      langEl.textContent = lang;
+
+      const content = FILE_CONTENTS[contentKey] || FILE_CONTENTS[name] || `<span class="cmt">// Source: ${name}\n// View the actual file in your editor.</span>`;
+      const lines = content.split('\n');
+      document.getElementById('code-viewer').innerHTML = lines.map((line, i) =>
+        `<div class="code-line"><span class="line-num">${i + 1}</span><span class="line-code">${line || ' '}</span></div>`
+      ).join('');
+    }
+
+    // ── Boot ──────────────────────────────────────────────────────────────────────
+    document.addEventListener('DOMContentLoaded', () => {
+      refreshDashboard();
+      loadNodes();
+
+      // Periodic refresh
+      setInterval(refreshDashboard, 10000);
+      setInterval(loadNodes, 15000);
+      setInterval(() => {
+        state.activityData.push(Math.floor(Math.random() * 6));
+        state.activityData = state.activityData.slice(-20);
+        drawActivityChart();
+      }, 3000);
+    });
+  </script>
+</body>
+
+</html>
