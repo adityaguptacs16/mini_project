@@ -6,7 +6,7 @@ const crypto = require('crypto');
 router.get('/', async (req, res) => {
   try {
     // Direct connection to correct database
-    const uri = process.env.MONGO_URI || 'mongodb+srv://adityahupta1605_db_user:aditya16@miniproject.0vawmke.mongodb.net/anti_entropy';
+    const uri = process.env.MONGO_URI;
     
     // Use separate connection to make sure correct DB
     const conn = await mongoose.createConnection(uri).asPromise();
