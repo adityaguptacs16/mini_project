@@ -1,8 +1,4 @@
-/**
- * Anti-Entropy Server
- * Express server that triggers on-demand repairs and coordinates
- * distributed repair processes across replica nodes.
- */
+
 
 require('dotenv').config();
 const express = require('express');
